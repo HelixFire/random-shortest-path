@@ -4,12 +4,15 @@ import numpy as np
 
 """
 TODO
+-fix button clear glitch
+-fix slider
+-add real dragging to slider (omg this is pobably harder than i think)
 -update find_next
 -create shortes path find algo
 """
 
 def setup():
-    global win,winsize,buttons,grids,arrow_mouse,font
+    global win,winsize,buttons,grids,arrow_mouse,font,sliders
 
     width,height = 800,815
     winsize = (width,height)
@@ -20,16 +23,14 @@ def setup():
     win = pygame.display.set_mode((width,height))
     pygame.display.set_caption("Cells")
 
-    button_pressed = pygame.image.load(r'pics/buttonpressed.png')
-    button_unpressed = pygame.image.load(r'pics/buttonunpressed.png')
-
-    cells = 20
+    button_pressed = pygame.image.load(r'pics\buttonpressed.png')
+    button_unpressed = pygame.image.load(r'pics\buttonunpressed.png')
 
     grids = [
-        stuff.Grid(win,(5,5),     (600,600),  cells,  'main', 0.995),   #main
-        stuff.Grid(win,(5,610),   (200,200),  cells,  'grid1'),       #1st save
-        stuff.Grid(win,(210,610), (200,200),  cells,  'grid2'),       #2nd save
-        stuff.Grid(win,(415,610), (200,200),  cells,  'grid3')        #3rd save
+        stuff.Grid(win,(5,5),     (600,600),  20,  'main', 0.995),   #main
+        stuff.Grid(win,(5,610),   (200,200),  20,  'grid1'),       #1st save
+        stuff.Grid(win,(210,610), (200,200),  20,  'grid2'),       #2nd save
+        stuff.Grid(win,(415,610), (200,200),  20,  'grid3')        #3rd save
     ]
 
     buttons = [
@@ -40,8 +41,9 @@ def setup():
         stuff.Button(win,(width-80,160),button_pressed,button_unpressed,'grid3'),
         ]
 
-    arrow_mouse = stuff.Arrow(win,grids[1].corner,(0,0))
-    font = pygame_font.Font(None,20)
+    sliders = [
+        stuff.Slider(win,'cells',(width-180,20),(0,50),1)
+    ]
 
     for grid in grids:
         grid.draw_grid()
@@ -49,13 +51,17 @@ def setup():
     for button in buttons:
         button.draw()
 
+    for slider in sliders:
+        slider.draw()
+
+    arrow_mouse = stuff.Arrow(win,(0,0),(0,0))
+    font = pygame_font.Font(None,20)
+
     pygame.display.update()
 
 def main():
-    global win,buttons,grids,arrow_mouse,font
-
     mouse_pos,mouse_pos_old = (0,0),(0,0)
-    frame_time,frame_times,frame_count = 1,[None]*50,1
+    frame_time,frame_count,frame_times = 1,1,[None]*50
     mouse_delta = 0
     next_cell = 0
 
@@ -63,8 +69,7 @@ def main():
     while on:
         start_timer = time.perf_counter_ns()
         pygame.display.update()
-        stuff.clear_debug(grids,win)
-
+        stuff.clear(win,grids,buttons)
         mouse_pos_old = mouse_pos
         mouse_pos = pygame.mouse.get_pos()
 
@@ -72,9 +77,6 @@ def main():
             mouse_delta = stuff.st(mouse_pos,mouse_pos_old)
         else:
             mouse_delta = 0
-
-        for button in buttons:
-            button.draw()
 
         text = f'{int(1/(frame_time/10**9))} fps'
         textpos = (grids[3].endcorner[0]+20, grids[3].corner[1]+10)
@@ -91,64 +93,29 @@ def main():
                         arrow_mouse.epos = new_cell[1]
                         arrow_mouse.draw()
 
-                    text = f'Name: {grid.id}'
-                    textpos = (grids[3].endcorner[0]+10, winsize[1]-90)
-                    font.render_to(win,textpos,text,stuff.colors['white'],None,size=20)
-                        
-                    distance = int(arrow_mouse.get_lengh()/grid.step_size*100)/100
-                    text = f'Distance: {distance}'
-                    textpos = (grids[3].endcorner[0]+10, winsize[1]-70)
-                    font.render_to(win,textpos,text,stuff.colors['white'],None,size=20)
-                        
-                    text = f'Angle: {arrow_mouse.get_angle()}°'
-                    textpos = (grids[3].endcorner[0]+10, winsize[1]-50)
-                    font.render_to(win,textpos,text,stuff.colors['white'],None,size=20)
-                        
-                    if next_cell == False :
-                        text = f'no cell in grid'
-                    else:
-                        text = f'Closest Cell: ({next_cell[0]+1}|{grid.cells-next_cell[1]})'
-                    textpos = (grids[3].endcorner[0]+10, winsize[1]-30)
-                    font.render_to(win,textpos,text,stuff.colors['white'],None,size=20)
-
+                    stuff.print_debug(font,win,grid,grids,arrow_mouse,next_cell) #this isnt nice
                 else:
                     grid.is_active = True
             else:
                 if grid.is_active:
                     grid.is_active = False
                     grid.draw_grid()
-        
+
         for event in pygame.event.get():
             if event.type == pygame.MOUSEBUTTONDOWN:
                 for button in buttons:
-                    if button.click(mouse_pos):
-                        button.is_pressed = True
-
-                        if button.name == 'quit':
-                            pygame.quit()
-                            pygame.font.quit()
-                            on = False
-                            break
-
-                        if button.name == 'update':
-                            grids[0].rand()
-                            grids[0].draw_grid()
-
-                        if button.name == 'clear':
-                            grids[0].clear()
-                            grids[0].draw_grid()
-
-                        if 'grid' in button.name:
-                            idx = int(button.name.replace('grid',''))
-                            grids[idx].data = grids[0].data
-                            grids[idx].draw_grid()
+                    button.click(mouse_pos,grids)
 
                 for grid in grids:
-                    grid.click(mouse_pos)
+                    grid.click(mouse_pos,event.button)
+
+                for slider in sliders:
+                    slider.drag(mouse_pos)
             
             if event.type == pygame.MOUSEBUTTONUP:
                 for button in buttons:
                     button.is_pressed = False
+                    button.draw()
 
             if event.type == pygame.QUIT:
                 on = False
