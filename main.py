@@ -4,7 +4,6 @@ import numpy as np
 
 """
 TODO
--implement png buttons
 -update find_next
 -create shortes path find algo
 """
@@ -21,6 +20,9 @@ def setup():
     win = pygame.display.set_mode((width,height))
     pygame.display.set_caption("Cells")
 
+    button_pressed = pygame.image.load(r'/media/p1geon/games n shit/Code/Code/python/projects/pygame/rsp redo/pics/buttonpressed.png')
+    button_unpressed = pygame.image.load(r'/media/p1geon/games n shit/Code/Code/python/projects/pygame/rsp redo/pics/buttonunpressed.png')
+
     cells = 20
 
     grids = [
@@ -31,11 +33,11 @@ def setup():
     ]
 
     buttons = [
-        stuff.Button(win,(width-105,5),     (100,75),'green','update'),
-        stuff.Button(win,(width-105,85),    (100,75),'blue','start'),
-        stuff.Button(win,(width-105,185),   (100,75),'blue','grid1'),
-        stuff.Button(win,(width-105,265),   (100,75),'blue','grid2'),
-        stuff.Button(win,(width-105,345),   (100,75),'blue','grid3'),
+        stuff.Button(win,(width-80,0),button_pressed,button_unpressed,'update'),
+        stuff.Button(win,(width-80,40),button_pressed,button_unpressed,'clear'),
+        stuff.Button(win,(width-80,80),button_pressed,button_unpressed,'grid1'),
+        stuff.Button(win,(width-80,120),button_pressed,button_unpressed,'grid2'),
+        stuff.Button(win,(width-80,160),button_pressed,button_unpressed,'grid3'),
         ]
 
     arrow_mouse = stuff.Arrow(win,grids[1].corner,(0,0))
@@ -71,12 +73,12 @@ def main():
         else:
             mouse_delta = 0
 
+        for button in buttons:
+            button.draw()
+
         text = f'{int(1/(frame_time/10**9))} fps'
         textpos = (grids[3].endcorner[0]+20, grids[3].corner[1]+10)
         font.render_to(win,textpos,text,stuff.colors['white'],None,size=20)
-
-        for button in buttons:
-    	    button.draw()
 
         for grid in grids:
             if grid.ongrid(mouse_pos):
@@ -85,7 +87,6 @@ def main():
                         grid.draw_grid()
                         new_cell = grid.find_next(mouse_pos)
                         next_cell = new_cell[0]
-                            
                         arrow_mouse.spos = mouse_pos
                         arrow_mouse.epos = new_cell[1]
                         arrow_mouse.draw()
@@ -116,12 +117,12 @@ def main():
                 if grid.is_active:
                     grid.is_active = False
                     grid.draw_grid()
-
+        
         for event in pygame.event.get():
             if event.type == pygame.MOUSEBUTTONDOWN:
                 for button in buttons:
                     if button.click(mouse_pos):
-                        button.is_active = True
+                        button.is_pressed = True
 
                         if button.name == 'quit':
                             pygame.quit()
@@ -133,23 +134,21 @@ def main():
                             grids[0].rand()
                             grids[0].draw_grid()
 
+                        if button.name == 'clear':
+                            grids[0].clear()
+                            grids[0].draw_grid()
+
                         if 'grid' in button.name:
                             idx = int(button.name.replace('grid',''))
                             grids[idx].data = grids[0].data
                             grids[idx].draw_grid()
 
                 for grid in grids:
-                    if grid.click(mouse_pos):
-                        idx = grid.get_cell_index(mouse_pos)
-                        if grid.data[idx[1]][idx[0]] == 0:
-                            grid.data[idx[1]][idx[0]] = 2
-                        elif grid.data[idx[1]][idx[0]] == 2:
-                            grid.data[idx[1]][idx[0]] = 0
-                    grid.draw_grid()
-
+                    grid.click(mouse_pos)
+            
             if event.type == pygame.MOUSEBUTTONUP:
                 for button in buttons:
-                    button.is_active = False
+                    button.is_pressed = False
 
             if event.type == pygame.QUIT:
                 on = False

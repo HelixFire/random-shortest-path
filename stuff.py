@@ -36,6 +36,7 @@ class Grid:
         self.step_size = int(size[0]/cells) #int
         self.cell_size = (self.step_size,self.step_size)    #tuple
         self.is_active = False  #bool
+        self.is_cleared = False #bool
 
         error_x = int((size[0]-cells*self.step_size)/2)  
         error_y = int((size[1]-cells*self.step_size)/2)
@@ -73,6 +74,7 @@ class Grid:
 
     def rand(self):
         self.data = rand_bool_grid((self.cells,self.cells),self.probability)
+        self.is_cleared = False
 
     def ongrid(self,pos):
         inside_x = pos[0] > self.e_corner[0] and pos[0] < self.e_corner[0]+self.e_size[0]
@@ -96,11 +98,20 @@ class Grid:
 
     def click(self,pos):
         rect = pygame.Rect(self.corner,self.size)
-
         if pygame.Rect.collidepoint(rect,pos):
-            return True
-        else:
-            return False
+            i = self.get_cell_index(pos)  #index of cell at mouse pos
+            data = self.data[i[1]][i[0]]
+            if self.is_cleared:
+                if data == 0:
+                    self.data[i[1]][i[0]] = 1
+                elif data == 1:
+                    self.data[i[1]][i[0]] = 0
+            else:
+                if data == 0:
+                    self.data[i[1]][i[0]] = 2
+                elif data == 2:
+                    self.data[i[1]][i[0]] = 0
+            self.draw_data(i)
 
     def get_rects(self):
         celloffset = dt(self.cell_size,(2,2))
@@ -118,39 +129,28 @@ class Grid:
 
         return rects
 
+    def clear(self):
+        self.data = np.zeros((self.cells,self.cells))
+        self.is_cleared = True
+
 class Button:
-    def __init__(self,win,corner,size,color,name='none'):
-        self.win = win #surface
-        self.corner = corner   #tuple
-        self.size = size   #tuple
-        self.color = color #tuple
-        self.name = name   #string
+    def __init__(self,win,corner,image,image_unpressed,name):
+        self.win = win  #surface
+        self.corner = corner    #tuple
+        self.image = image  #pygame.image
+        self.image_unpressed = image_unpressed  #pygame.image
+        self.name = name    #string
         
-        self.padding = dt(self.size,(5,5))
-        self.is_active = False
-
-    def draw_button(self,color):
-        rect = pygame.Rect(self.corner,self.size)
-
-        pygame.draw.rect(self.win,colors['light'+color],rect,0)
-        pygame.draw.rect(self.win,colors['darkgrey'],rect,2)
-
-        rect = pygame.Rect.inflate(rect,-self.padding[0],-self.padding[1])
-
-        pygame.draw.rect(self.win,colors[color],rect,0)
-        pygame.draw.rect(self.win,colors['darkgrey'],rect,1)
+        self.padding = 5
+        self.size = self.image.get_size()
+        self.is_pressed = False
 
     def draw(self):
-        if self.is_active:
-            self.draw_button(self.color)
+        if self.is_pressed:
+            image = self.image
         else:
-            if self.name == 'quit':
-                color = 'red'
-            elif self.name == 'update':
-                color = 'green'
-            else:
-                color = 'grey'
-            self.draw_button(color)
+            image = self.image_unpressed
+        self.win.blit(image,self.corner)
 
     def click(self,pos):
         rect = pygame.Rect(self.corner,self.size)
@@ -214,7 +214,7 @@ class Arrow:
 
 def clear_debug(grids,win,color=colors['black']):
     winsize = pygame.Surface.get_size(win)
-    pygame.gfxdraw.box(win,(grids[3].endcorner[0]+2,winsize[1]-210,winsize[0],winsize[1]),color)
+    pygame.gfxdraw.box(win,(grids[3].endcorner[0]+2,0,winsize[0],winsize[1]),color)
 
 def clear_screen(win):
     pygame.gfxdraw.box(win,pygame.Surface.get_rect(win),colors['black'])
@@ -245,6 +245,7 @@ def index_gen(size_y, size_x, y_zero, x_zero):
 def find_next(grid, pos):
     size = len(grid[0])
     for index in index_gen(len(grid), size, pos[1], pos[0]):
+        print(size)
         y_idx = int(index/size)
         x_idx = index - size * y_idx
         
