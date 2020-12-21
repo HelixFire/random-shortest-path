@@ -1,6 +1,6 @@
 import random, time, pygame, pygame.gfxdraw, pygame.font, math
-from pygame import ftfont as pygame_font
 import numpy as np
+from pygame import ftfont as pygame_font
 
 colors = {
     'black'         : (0,0,0),
@@ -44,8 +44,6 @@ class Grid:
         self.e_size = mt(self.cell_size,(cells,cells))   #tuple
         self.rects = self.get_rects()   #list
 
-        #probably need to clean this class up
-
     def draw_grid(self):
         for y in range(self.cells):
             for x in range(self.cells):
@@ -81,7 +79,8 @@ class Grid:
     def ongrid(self,pos):
         inside_x = pos[0] > self.e_corner[0] and pos[0] < self.e_corner[0]+self.e_size[0]
         inside_y = pos[1] > self.e_corner[1] and pos[1] < self.e_corner[1]+self.e_size[1]
-        if inside_x and inside_y:   return True
+        if inside_x and inside_y:
+            return True
         else:   return False
 
     def get_cell_pos(self,index):
@@ -97,28 +96,21 @@ class Grid:
         iy = int((pos[1]-self.e_corner[1])/self.step_size)
         return(ix,iy)
 
-    def click(self,pos,button):
+    def click(self,pos):
         rect = pygame.Rect(self.corner,self.size)
         if pygame.Rect.collidepoint(rect,pos):
             i = self.get_cell_index(pos)  #index of cell at mouse pos
             data = self.data[i[1]][i[0]]
-
-            if self.is_cleared:                     #check if grid is in "cleared mode"
-                if button == 1:                     #left click for normal cell
-                    if data == 0 or 2:              #if cell is empty or start type
-                        self.data[i[1]][i[0]] = 1   #set cell on
-                    if data == 1:                   #idk why elif nor else works but check if cell is filled
-                        self.data[i[1]][i[0]] = 0   #set cell off
-                if button == 3:                     #right click for "start cell"
-                    if data == 0 or 1:              #if cell is on or off
-                        self.data[i[1]][i[0]] = 2   #set as start cell
-                    if data == 2:                   #if cell start type
-                        self.data[i[1]][i[0]] = 0   #set empty/off
-            else:                                   #grid isnt in "cleared mode"
-                if data == 0:                       #if cell off
-                    self.data[i[1]][i[0]] = 2       #set as start cell
-                elif data == 2:                     #if start cell
-                    self.data[i[1]][i[0]] = 0       #set cell off
+            if self.is_cleared:
+                if data == 0:
+                    self.data[i[1]][i[0]] = 1
+                elif data == 1:
+                    self.data[i[1]][i[0]] = 0
+            else:
+                if data == 0:
+                    self.data[i[1]][i[0]] = 2
+                elif data == 2:
+                    self.data[i[1]][i[0]] = 0
             self.draw_data(i)
 
     def get_rects(self):
@@ -151,7 +143,6 @@ class Button:
         
         self.padding = 5
         self.size = self.image.get_size()
-        self.end_corner = at(self.corner,self.size)
         self.is_pressed = False
 
     def draw(self):
@@ -161,40 +152,14 @@ class Button:
             image = self.image_unpressed
         self.win.blit(image,self.corner)
 
-        textpos = at(self.corner,(10,20))
-        pygame_font.Font(None,30).render_to(
-            self.win,
-            textpos,
-            self.name,
-            colors['white'],
-            None,
-            size=30)
-
-    def click(self,pos,grids):
+    def click(self,pos):
         rect = pygame.Rect(self.corner,self.size)
+
         if pygame.Rect.collidepoint(rect,pos):
-            self.is_pressed = True
-            pygame.gfxdraw.box(self.win,(self.corner,self.end_corner),colors['black'])
-            self.draw()
+            return True
+        else:
+            return False
 
-            if self.name == 'quit':
-                pygame.quit()
-                pygame.font.quit()
-                on = False
-
-            if self.name == 'update':
-                grids[0].rand()
-                grids[0].draw_grid()
-
-            if self.name == 'clear':
-                grids[0].clear()
-                grids[0].draw_grid()
-
-            if 'grid' in self.name:
-                idx = int(self.name.replace('grid',''))
-                grids[idx].data = grids[0].data
-                grids[idx].draw_grid()
-        
 class Arrow:
     def __init__(self,win,spos,epos,color=colors['red']):
         self.win = win
@@ -247,47 +212,12 @@ class Arrow:
         d = st(self.spos,self.epos)
         return (d[0]**2+d[1]**2)**0.5
 
-class Slider:
-    def __init__(self,win,name,corner,range,step_size):
-        self.win = win  #pygame.surface
-        self.name = name    #string
-        self.corner = corner  #tuple (x,y)
-        self.num_range = range  #tuple (min,max)
-        self.step_size = step_size
-
-        self.size = (80,20)
-        self.state = 0
-
-    def draw(self):
-        pygame.gfxdraw.box(self.win,(st(self.corner,(4,0)),at(self.size,(4,0))),colors['black'])
-
-        corner = at(self.corner,(0,8))
-        size = (self.size[0],4)
-        pygame.gfxdraw.box(self.win,(corner,size),colors['white'])
-
-        px_step = self.size[0] / (self.num_range[1]-self.num_range[0])
-        step = self.state-self.num_range[0]
-        sliderpos = self.corner[0] + step * px_step
-        corner = (sliderpos-4,self.corner[1])
-        size = (8,self.size[1])
-        pygame.gfxdraw.box(self.win,(corner,size),colors['red'])
-
-    def drag(self,pos):
-        rect = pygame.Rect(self.corner,self.size)
-        if pygame.Rect.collidepoint(rect,pos):
-            px_step = self.size[0] / (self.num_range[1]-self.num_range[0])
-            
-            self.state = pos[0]-self.corner[0]/px_step+self.num_range[0]
-            self.draw()
-            print(self.state)
-            print(pos[0]-self.corner[0])
-
-
-def clear(win,grids,buttons,color=colors['black']):
+def clear_debug(grids,win,color=colors['black']):
     winsize = pygame.Surface.get_size(win)
-    x = grids[-1].endcorner[0]+2
-    y = grids[-1].corner[1]-2
-    pygame.gfxdraw.box(win,(x,y,winsize[0],winsize[1]),color)
+    pygame.gfxdraw.box(win,(grids[3].endcorner[0]+2,0,winsize[0],winsize[1]),color)
+
+def clear_screen(win):
+    pygame.gfxdraw.box(win,pygame.Surface.get_rect(win),colors['black'])
 
 def table(y_len, x_len, y_zero, x_zero):
     a = np.zeros((y_len,x_len))
@@ -306,13 +236,16 @@ def index_gen(size_y, size_x, y_zero, x_zero):
 
         for x in range(size_y*size_x):
             idx = len_table.argmin()
+
             yield idx
+        
             y = int(idx/size_x)
             len_table[y][idx-y*size_x] = 2*size_x
 
 def find_next(grid, pos):
     size = len(grid[0])
     for index in index_gen(len(grid), size, pos[1], pos[0]):
+        print(size)
         y_idx = int(index/size)
         x_idx = index - size * y_idx
         
@@ -322,34 +255,6 @@ def find_next(grid, pos):
 
 def rand_bool_grid(size, p = 0.95):
         return np.random.choice([0,1], size, p=[p, 1-p])
-
-def print_debug(font,win,grid,grids,arrow,next_cell=False):
-    winsize = pygame.Surface.get_size(win)
-
-    text = f'Name: {grid.id}'
-    textpos = (grids[3].endcorner[0]+10, winsize[1]-90)
-    font.render_to(win,textpos,text,colors['white'],None,size=25)
-                        
-    distance = int(arrow.get_lengh()/grid.step_size*100)/100
-    text = f'Distance: {distance}'
-    textpos = (grids[3].endcorner[0]+10, winsize[1]-70)
-    font.render_to(win,textpos,text,colors['white'],None,size=25)
-                        
-    text = f'Angle: {arrow.get_angle()}°'
-    textpos = (grids[3].endcorner[0]+10, winsize[1]-50)
-    font.render_to(win,textpos,text,colors['white'],None,size=25)
-                        
-    if next_cell == False :
-        text = f'no cell in grid'
-    else:
-        text = f'Closest Cell: ({next_cell[0]+1}|{grid.cells-next_cell[1]})'
-    textpos = (grids[3].endcorner[0]+10, winsize[1]-30)
-    font.render_to(win,textpos,text,colors['white'],None,size=25)
-
-    if grid.is_cleared:
-        text = f'Cleared'
-        textpos = (grids[3].endcorner[0]+10, winsize[1]-10)
-        font.render_to(win,textpos,text,colors['red'],None,size=25)
 
 def at(a,b):
     return (a[0]+b[0],a[1]+b[1])
