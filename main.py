@@ -20,8 +20,8 @@ def setup():
     win = pygame.display.set_mode((width,height))
     pygame.display.set_caption("Cells")
 
-    button_pressed = pygame.image.load(r'/media/p1geon/games n shit/Code/Code/python/projects/pygame/rsp redo/pics/buttonpressed.png')
-    button_unpressed = pygame.image.load(r'/media/p1geon/games n shit/Code/Code/python/projects/pygame/rsp redo/pics/buttonunpressed.png')
+    button_pressed = pygame.image.load(r'pics/buttonpressed.png')
+    button_unpressed = pygame.image.load(r'pics/buttonunpressed.png')
 
     cells = 20
 
