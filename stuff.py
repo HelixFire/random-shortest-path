@@ -33,20 +33,13 @@ class Grid:
         self.endcorner = at(corner,size) #tuple
         self.probability = probability   #float
         self.data = rand_bool_grid((cells,cells),probability)    #2d np list
-        self.step_size = int(size[0]/cells) #int
-        self.cell_size = (self.step_size,self.step_size)    #tuple
         self.is_active = False  #bool
         self.is_cleared = False #bool
 
-        error_x = int((size[0]-cells*self.step_size)/2)  
-        error_y = int((size[1]-cells*self.step_size)/2)
-        self.e_corner = at(corner,(error_x,error_y)) #tuple
-        self.e_size = mt(self.cell_size,(cells,cells))   #tuple
-        self.rects = self.get_rects()   #list
-
-        #probably need to clean this class up
-
     def draw_grid(self):
+        self.rects = self.get_rects()
+        pygame.gfxdraw.box(self.win,(self.corner,self.size),colors['black'])
+
         for y in range(self.cells):
             for x in range(self.cells):
                 self.draw_data((x,y))
@@ -122,6 +115,12 @@ class Grid:
             self.draw_data(i)
 
     def get_rects(self):
+        self.step_size = int(self.size[0]/self.cells)
+        error_x = int((self.size[0]-self.cells*self.step_size)/2)  
+        error_y = int((self.size[1]-self.cells*self.step_size)/2)
+        self.e_corner = at(self.corner,(error_x,error_y))
+        self.cell_size = (self.step_size,self.step_size)
+        self.e_size = mt(self.cell_size,(self.cells,self.cells))
         celloffset = dt(self.cell_size,(2,2))
 
         def midpoints():
@@ -155,6 +154,7 @@ class Button:
         self.is_pressed = False
 
     def draw(self):
+        pygame.gfxdraw.box(self.win,(self.corner,self.size),colors['black'])
         if self.is_pressed:
             image = self.image
         else:
@@ -174,7 +174,6 @@ class Button:
         rect = pygame.Rect(self.corner,self.size)
         if pygame.Rect.collidepoint(rect,pos):
             self.is_pressed = True
-            pygame.gfxdraw.box(self.win,(self.corner,self.end_corner),colors['black'])
             self.draw()
 
             if self.name == 'quit':
@@ -248,40 +247,73 @@ class Arrow:
         return (d[0]**2+d[1]**2)**0.5
 
 class Slider:
-    def __init__(self,win,name,corner,range,step_size):
+    def __init__(self,win,name,corner,range,step_size,font):
         self.win = win  #pygame.surface
         self.name = name    #string
         self.corner = corner  #tuple (x,y)
         self.num_range = range  #tuple (min,max)
-        self.step_size = step_size
+        self.step_size = step_size  #int
+        self.font = font
 
         self.size = (80,20)
-        self.state = 0
+        self.state = 1
 
     def draw(self):
-        pygame.gfxdraw.box(self.win,(st(self.corner,(4,0)),at(self.size,(4,0))),colors['black'])
+        def clear(color=colors['black']):
+            corner = st(self.corner,(4,0))
+            size = at(self.size,(8,20))
+            pygame.gfxdraw.box(self.win,(corner,size),color)
 
-        corner = at(self.corner,(0,8))
-        size = (self.size[0],4)
-        pygame.gfxdraw.box(self.win,(corner,size),colors['white'])
+        def draw_line(color=colors['white']):
+            corner = at(self.corner,(0,self.size[1]/2-2))
+            size = (self.size[0],4)
+            pygame.gfxdraw.box(self.win,(corner,size),color)
 
-        px_step = self.size[0] / (self.num_range[1]-self.num_range[0])
-        step = self.state-self.num_range[0]
-        sliderpos = self.corner[0] + step * px_step
-        corner = (sliderpos-4,self.corner[1])
-        size = (8,self.size[1])
-        pygame.gfxdraw.box(self.win,(corner,size),colors['red'])
-
-    def drag(self,pos):
-        rect = pygame.Rect(self.corner,self.size)
-        if pygame.Rect.collidepoint(rect,pos):
+        def draw_slider(color=colors['red']):
             px_step = self.size[0] / (self.num_range[1]-self.num_range[0])
-            
-            self.state = pos[0]-self.corner[0]/px_step+self.num_range[0]
-            self.draw()
-            print(self.state)
-            print(pos[0]-self.corner[0])
+            step = self.state-self.num_range[0]
+            sliderpos = self.corner[0] + step * px_step
+            corner = (sliderpos-4,self.corner[1])
+            size = (8,self.size[1])
+            pygame.gfxdraw.box(self.win,(corner,size),color)
 
+        def draw_text():
+            text = f'{self.name} = {self.state}'
+            textpos = at(self.corner,(0,self.size[1]+13))
+            self.font.render_to(self.win,textpos,text,colors['white'],None,size=20)
+
+        clear_color = colors['black']
+        line_color = colors['white']
+        slider_color = colors['red']
+
+        clear(clear_color)
+        draw_line(line_color)
+        draw_slider(slider_color)
+        draw_text()
+        
+    def get_nums(self):
+        start = self.num_range[0]
+        stop = self.num_range[1]+self.step_size
+        step = self.step_size
+        dp = self.step_size**-1
+        return (np.arange(start,stop,step)*dp).astype(int)/dp
+        
+    def work(self,pos,mouse_pressed,grids):
+        rect = pygame.Rect(self.corner,at(self.size,(1,0)))
+        if pygame.Rect.collidepoint(rect,pos) and mouse_pressed[0]:
+            step_px = (self.num_range[1]-self.num_range[0]) / self.size[0]
+            nums = self.get_nums()
+            self.state = min(nums, key=lambda x:abs(x-((pos[0]-self.corner[0]) * step_px) - self.num_range[0]))
+            self.draw()
+
+            if self.name == 'cells':
+                grids[0].cells = int(self.state)
+                grids[0].rand()
+                grids[0].draw_grid()
+
+            if self.name == 'prob':
+                grids[0].probability = self.state
+                grids[0].draw_grid()
 
 def clear(win,grids,buttons,color=colors['black']):
     winsize = pygame.Surface.get_size(win)
