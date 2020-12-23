@@ -34,25 +34,31 @@ class Grid:
         self.probability = probability   #float
         self.data = rand_bool_grid((cells,cells),probability)    #2d np list
         self.is_active = False  #bool
-        self.is_cleared = False #bool
+        self.in_edit = False #bool
 
     def draw_grid(self):
         self.rects = self.get_rects()
-        pygame.gfxdraw.box(self.win,(self.corner,self.size),colors['black'])
+        pd = (3,3)
+        corner = st(self.corner,pd)
+        size = at(self.size,at(pd,pd))
+        pygame.gfxdraw.box(self.win,(corner,size),colors['black'])
 
         for y in range(self.cells):
             for x in range(self.cells):
                 self.draw_data((x,y))
         
     def draw_data(self,index):
-        if self.data[index[1]][index[0]] == 1:
-            color = colors['black']
-            f_color = colors['white']
-        elif self.data[index[1]][index[0]] == 0:
+        if self.data[index[1]][index[0]] == 0:
             color = colors['white']
             f_color = colors['black']
+        elif self.data[index[1]][index[0]] == 1:
+            color = colors['black']
+            f_color = colors['white']
         elif self.data[index[1]][index[0]] == 2:
             color = colors['darkgreen']
+            f_color = colors['white']
+        elif self.data[index[1]][index[0]] == 3:
+            color = colors['darkred']
             f_color = colors['white']
                 
         rect = self.rects[self.cells*index[1]+index[0]]
@@ -69,7 +75,7 @@ class Grid:
 
     def rand(self):
         self.data = rand_bool_grid((self.cells,self.cells),self.probability)
-        self.is_cleared = False
+        self.in_edit = False
 
     def ongrid(self,pos):
         inside_x = pos[0] > self.e_corner[0] and pos[0] < self.e_corner[0]+self.e_size[0]
@@ -93,26 +99,56 @@ class Grid:
     def click(self,pos,button):
         rect = pygame.Rect(self.corner,self.size)
         if pygame.Rect.collidepoint(rect,pos):
-            i = self.get_cell_index(pos)  #index of cell at mouse pos
+            i = self.get_cell_index(pos)
             data = self.data[i[1]][i[0]]
+            no_start = type(self.get_start())==bool
+            no_end = type(self.get_end())==bool
 
-            if self.is_cleared:                     #check if grid is in "cleared mode"
-                if button == 1:                     #left click for normal cell
-                    if data == 0 or 2:              #if cell is empty or start type
-                        self.data[i[1]][i[0]] = 1   #set cell on
-                    if data == 1:                   #idk why elif nor else works but check if cell is filled
-                        self.data[i[1]][i[0]] = 0   #set cell off
-                if button == 3:                     #right click for "start cell"
-                    if data == 0 or 1:              #if cell is on or off
-                        self.data[i[1]][i[0]] = 2   #set as start cell
-                    if data == 2:                   #if cell start type
-                        self.data[i[1]][i[0]] = 0   #set empty/off
-            else:                                   #grid isnt in "cleared mode"
-                if data == 0:                       #if cell off
-                    self.data[i[1]][i[0]] = 2       #set as start cell
-                elif data == 2:                     #if start cell
-                    self.data[i[1]][i[0]] = 0       #set cell off
-            self.draw_data(i)
+            if self.in_edit:            #edit mode
+                if button == 1:     #left click
+                    set_table = {
+                        0 : [data==1],
+                        1 : [data==0, data==2, data==3]}
+                    for x in set_table:
+                        if any(set_table[x]):
+                            self.data[i[1]][i[0]] = x
+
+                elif button == 2:   #middle click
+                    self.data[i[1]][i[0]] = 0
+
+                elif button == 3:   #right click
+                    set_table = {
+                        3 : [(data == 0 and no_end),(data == 1 and no_end),(data == 2 and no_end)],
+                        2 : [(data == 0 and no_start),(data == 1 and no_start),(data == 3 and no_start)],
+                        0 : [(data == 3),(data == 2 and not no_end)]}
+                    for x in set_table:
+                        if any(set_table[x]):
+                            self.data[i[1]][i[0]] = x
+
+            else:                       #preset mode
+                if button == 1:     #left click
+                    set_table = {
+                        0 : [(data == 2)],
+                        2 : [(data == 0 or data == 3),(no_start)]}
+                    for x in set_table:
+                        if all(set_table[x]):
+                            self.data[i[1]][i[0]] = x
+
+                elif button == 2:   #middle click
+                    if any([data==0, data==2, data==3]):
+                        self.data[i[1]][i[0]] = 0
+
+                elif button == 3:   #right click
+                    set_table = {
+                        0 : [(data == 3)],
+                        3 : [(data == 0 or data == 2),(no_end)]}
+                    for x in set_table:
+                        if all(set_table[x]):
+                            self.data[i[1]][i[0]] = x
+
+            if data-self.data[i[1]][i[0]]:
+                self.draw_data(i)
+        #if anyone reads this, tell me if theres a better way to assert functions to mouse inputs with respect to what is being clicked on
 
     def get_rects(self):
         self.step_size = int(self.size[0]/self.cells)
@@ -137,8 +173,31 @@ class Grid:
         return rects
 
     def clear(self):
-        self.data = np.zeros((self.cells,self.cells))
-        self.is_cleared = True
+        self.data = np.zeros((self.cells,self.cells)).tolist()
+        self.in_edit = True
+
+    def get_cells(self):
+        c = 0
+        cells = []
+
+        for x in self.data:
+            if x == 1:
+                cells.append((c%self.cells,int(c/self.size)))
+            c += 1
+
+        return cells
+
+    def get_start(self):
+        try:
+            return np.array(self.data).flatten().tolist().index(2)
+        except:
+            return False
+
+    def get_end(self):
+        try:
+            return np.array(self.data).flatten().tolist().index(3)
+        except:
+            return False
 
 class Button:
     def __init__(self,win,corner,image,image_unpressed,name):
@@ -189,8 +248,12 @@ class Button:
                 grids[0].clear()
                 grids[0].draw_grid()
 
+            if self.name == 'edit':
+                grids[0].in_edit = True
+
             if 'grid' in self.name:
                 idx = int(self.name.replace('grid',''))
+                grids[idx].cells = grids[0].cells
                 grids[idx].data = grids[0].data
                 grids[idx].draw_grid()
         
@@ -247,7 +310,7 @@ class Arrow:
         return (d[0]**2+d[1]**2)**0.5
 
 class Slider:
-    def __init__(self,win,name,corner,range,step_size,font):
+    def __init__(self,win,name,corner,range,step_size,font,state = None):
         self.win = win  #pygame.surface
         self.name = name    #string
         self.corner = corner  #tuple (x,y)
@@ -256,7 +319,7 @@ class Slider:
         self.font = font
 
         self.size = (80,20)
-        self.state = 1
+        self.state = state
 
     def draw(self):
         def clear(color=colors['black']):
@@ -270,6 +333,9 @@ class Slider:
             pygame.gfxdraw.box(self.win,(corner,size),color)
 
         def draw_slider(color=colors['red']):
+            if self.state == None:
+                self.state = self.num_range[0]
+
             px_step = self.size[0] / (self.num_range[1]-self.num_range[0])
             step = self.state-self.num_range[0]
             sliderpos = self.corner[0] + step * px_step
@@ -282,13 +348,9 @@ class Slider:
             textpos = at(self.corner,(0,self.size[1]+13))
             self.font.render_to(self.win,textpos,text,colors['white'],None,size=20)
 
-        clear_color = colors['black']
-        line_color = colors['white']
-        slider_color = colors['red']
-
-        clear(clear_color)
-        draw_line(line_color)
-        draw_slider(slider_color)
+        clear()
+        draw_line()
+        draw_slider()
         draw_text()
         
     def get_nums(self):
@@ -300,20 +362,23 @@ class Slider:
         
     def work(self,pos,mouse_pressed,grids):
         rect = pygame.Rect(self.corner,at(self.size,(1,0)))
-        if pygame.Rect.collidepoint(rect,pos) and mouse_pressed[0]:
+        if pygame.Rect.collidepoint(rect,pos) and mouse_pressed[1]:
             step_px = (self.num_range[1]-self.num_range[0]) / self.size[0]
             nums = self.get_nums()
+            state = self.state
             self.state = min(nums, key=lambda x:abs(x-((pos[0]-self.corner[0]) * step_px) - self.num_range[0]))
-            self.draw()
+            
+            if state-self.state:
+                self.draw()
 
-            if self.name == 'cells':
-                grids[0].cells = int(self.state)
-                grids[0].rand()
-                grids[0].draw_grid()
+                if self.name == 'cells':
+                    grids[0].cells = int(self.state)
+                    grids[0].rand()
+                    grids[0].draw_grid()
 
-            if self.name == 'prob':
-                grids[0].probability = self.state
-                grids[0].draw_grid()
+                if self.name == 'prob':
+                    grids[0].probability = self.state
+                    grids[0].draw_grid()
 
 def clear(win,grids,buttons,color=colors['black']):
     winsize = pygame.Surface.get_size(win)
@@ -353,7 +418,7 @@ def find_next(grid, pos):
     return False
 
 def rand_bool_grid(size, p = 0.95):
-        return np.random.choice([0,1], size, p=[p, 1-p])
+        return np.random.choice([0,1], size, p=[p, 1-p]).tolist()
 
 def print_debug(font,win,grid,grids,arrow,next_cell=False):
     winsize = pygame.Surface.get_size(win)
@@ -378,8 +443,8 @@ def print_debug(font,win,grid,grids,arrow,next_cell=False):
     textpos = (grids[3].endcorner[0]+10, winsize[1]-30)
     font.render_to(win,textpos,text,colors['white'],None,size=25)
 
-    if grid.is_cleared:
-        text = f'Cleared'
+    if grid.in_edit:
+        text = f'Edit Mode'
         textpos = (grids[3].endcorner[0]+10, winsize[1]-10)
         font.render_to(win,textpos,text,colors['red'],None,size=25)
 
@@ -394,3 +459,8 @@ def mt(a,b):
 
 def dt(a,b):
     return (a[0]/b[0],a[1]/b[1])
+
+def print_fps(win,font,grids,frame_time):
+    text = f'{int(1 / (frame_time / 10 ** 9))} fps'
+    textpos = (grids[3].endcorner[0] + 20, grids[3].corner[1] + 10)
+    font.render_to(win, textpos, text, colors['white'], None, size=20)

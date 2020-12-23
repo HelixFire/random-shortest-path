@@ -3,8 +3,24 @@ from pygame import ftfont as pygame_font
 import numpy as np
 
 """
+DONE
+-added end cell
+-fixed mouse input for cells
+-fixed slider init pos being outside boudings
+-fixed arrow drawing outside grid
+-fixed other grids not updating grid.cells when you press button
+-fixed slider starting in right pos
+-fixed changing grid data should change it on all grids simoltanuesly
+-fixed slider clicking should update state
+-fixed slider, grid should only update when slider is
+-fixed only one possible start/end cell
+-added middle click to empty cell
+-renamed grid.is_cleared to grid.in_edit
+-added edit button (for main grid only)
+
 TODO
 -draw nicer arrow
+-add check box
 -update find_next
 -create shortes path find algo
 """
@@ -21,29 +37,31 @@ def setup():
     font = pygame_font.Font(None, 20)
     win = pygame.display.set_mode((width, height))
     pygame.display.set_caption("Cells")
-    mouse_pressed = [False, False, False]
+    mouse_pressed = [False]*10
 
     button_pressed = pygame.image.load(r'pics\buttonpressed.png')
     button_unpressed = pygame.image.load(r'pics\buttonunpressed.png')
 
     grids = [
-        stuff.Grid(win, (5, 5), (600, 600), 20, 'main', 0.9),  # main
-        stuff.Grid(win, (5, 610), (200, 200), 20, 'grid1'),  # 1st save
-        stuff.Grid(win, (210, 610), (200, 200), 20, 'grid2'),  # 2nd save
-        stuff.Grid(win, (415, 610), (200, 200), 20, 'grid3')  # 3rd save
+        stuff.Grid(win, (5, 5),     (600, 600), 20, 'main', 0.9),
+        stuff.Grid(win, (5, 610),   (200, 200), 20, 'grid1'), 
+        stuff.Grid(win, (210, 610), (200, 200), 20, 'grid2'), 
+        stuff.Grid(win, (415, 610), (200, 200), 20, 'grid3') 
     ]
 
     buttons = [
-        stuff.Button(win, (width - 80, 0), button_pressed, button_unpressed, 'update'),
+        stuff.Button(win, (width - 80, 0),  button_pressed, button_unpressed, 'update'),
         stuff.Button(win, (width - 80, 40), button_pressed, button_unpressed, 'clear'),
         stuff.Button(win, (width - 80, 80), button_pressed, button_unpressed, 'grid1'),
         stuff.Button(win, (width - 80, 120), button_pressed, button_unpressed, 'grid2'),
         stuff.Button(win, (width - 80, 160), button_pressed, button_unpressed, 'grid3'),
+        stuff.Button(win, (width - 80, 200), button_pressed, button_unpressed, 'edit'),
+        stuff.Button(win, (width - 80, 240), button_pressed, button_unpressed, 'run'),
     ]
 
     sliders = [
-        stuff.Slider(win, 'cells', (width - 180, 10), (1, 30), 1, font),
-        stuff.Slider(win, 'prob', (width - 180, 50), (0, 1), 0.01, font)
+        stuff.Slider(win, 'cells', (width - 180, 10), (3, 30), 1, font, grids[0].cells),
+        stuff.Slider(win, 'prob', (width - 180, 50), (0.8, 1), 0.005, font, grids[0].probability)
     ]
 
     arrow_mouse = stuff.Arrow(win, (0, 0), (0, 0))
@@ -78,9 +96,7 @@ def main():
         else:
             mouse_delta = 0
 
-        text = f'{int(1 / (frame_time / 10 ** 9))} fps'
-        textpos = (grids[3].endcorner[0] + 20, grids[3].corner[1] + 10)
-        font.render_to(win, textpos, text, stuff.colors['white'], None, size=20)
+        stuff.print_fps(win,font,grids,frame_time)
 
         for grid in grids:
             if grid.ongrid(mouse_pos):
@@ -101,20 +117,22 @@ def main():
                     grid.is_active = False
                     grid.draw_grid()
 
-        for slider in sliders:
-            slider.work(mouse_pos,mouse_pressed,grids)
+        if mouse_delta:
+            for slider in sliders:
+                slider.work(mouse_pos,mouse_pressed,grids)
 
         for event in pygame.event.get():
             if event.type == pygame.MOUSEBUTTONDOWN:
-                mouse_pressed[event.button-1] = True
+                mouse_pressed[event.button] = True
                 for button in buttons:
                     button.click(mouse_pos, grids)
 
                 for grid in grids:
                     grid.click(mouse_pos, event.button)
+                    grid.draw_grid()
 
             if event.type == pygame.MOUSEBUTTONUP:
-                mouse_pressed[event.button-1] = False
+                mouse_pressed[event.button] = False
                 for button in buttons:
                     button.is_pressed = False
                     button.draw()
