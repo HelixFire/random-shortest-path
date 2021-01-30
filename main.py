@@ -1,14 +1,18 @@
-import pygame, pygame.gfxdraw, pygame.image, pygame.font, time, math, stuff, sys
+import pygame, pygame.gfxdraw, pygame.image, time, math, stuff, sys
 from pygame import ftfont as pygame_font
 import numpy as np
 
 """
 DONE
--added more debug text
--enhanced mouse input in preset mode (took way too long but id say its finished)
--i finally implemented a "search way" function, wich in future should display the shortest rout, but for now it just looks nice
+-fixed path not dissaprearing when updating grid
+-cleaned up "game cycle", moving stuff to stuff
+-general cleanup (little bit)
 
 TODO
+-found out about operator overloading, gotta use that
+-found out about good variable naming (_val: inner workings)
+-edit button should toggle
+-update grid when changing probability-slider
 -fix grid to proper size (smooth scale)
 -draw nicer arrow
 -add check box
@@ -16,9 +20,10 @@ TODO
 -update find_next
 -create shortes path find algo
 """
+win, winsize, buttons, grids, arrow_mouse, font, sliders = 0,0,0,0,0,0,0 #this is the only way to fix this dang "undeclared var squiggle line" from the globally set variables, ive tried reinstalling language server
 
 def setup():
-    global win, winsize, buttons, grids, arrow_mouse, font, sliders, mouse_pressed
+    global win, winsize, buttons, grids, arrow_mouse, font, sliders
 
     width, height = 800, 815
     winsize = (width, height)
@@ -27,9 +32,8 @@ def setup():
     pygame.display.init()
     pygame_font.init()
     font = pygame_font.Font(None, 20)
-    win = pygame.display.set_mode((width, height))
+    win = pygame.display.set_mode(winsize)
     pygame.display.set_caption("Cells")
-    mouse_pressed = [False]*100
 
     button_pressed = pygame.image.load(r'pics\buttonpressed.png')
     button_unpressed = pygame.image.load(r'pics\buttonunpressed.png')
@@ -53,7 +57,7 @@ def setup():
 
     sliders = [
         stuff.Slider(win, 'cells', (width - 180, 10), (3, 30), 1, font, grids[0].cells),
-        stuff.Slider(win, 'prob', (width - 180, 50), (0, 1), 0.01, font, grids[0].probability)
+        stuff.Slider(win, 'prob', (width - 180, 50), (0.5, 1), 0.01, font, grids[0].probability)
     ]
 
     for grid in grids:
@@ -68,79 +72,48 @@ def setup():
     pygame.display.update()
 
 def main():
-    mouse_pos, mouse_pos_old = (0, 0), (0, 0)
-    frame_time, frame_count, frame_times = 1, 1, [None] * 50
-    mouse_delta = 0
-    next_cell = (0,0)
+    mouse_pos, mouse_pos_old, mouse_delta = (0, 0), (0,0), 0
+    frame_time, frame_count, frame_times, start_timer = 1, 1, [None] * 50, 0
+    st =  stuff.tm('-')
 
     on = True
     while on:
-        start_timer = time.perf_counter_ns()
-        pygame.display.update()
-        mouse_pos_old = mouse_pos
-        mouse_pos = pygame.mouse.get_pos()
-
-        if not mouse_pos == mouse_pos_old:
-            mouse_delta = stuff.st(mouse_pos, mouse_pos_old)
-        else:
-            mouse_delta = 0
-
-        for grid in grids:
-            if grid.ongrid(mouse_pos):
-                if grid.is_active:
-                    if mouse_delta:
-                        grid.draw_grid()
-                        next_cell = grid.find_next(mouse_pos)
-                        stuff.print_debug(font,win,grids,grid,next_cell[0])
-                else:
-                    grid.is_active = True
-            else:
-                if grid.is_active:
-                    grid.is_active = False
-                    grid.draw_grid()
-                    stuff.print_debug(font,win,grids)
-
-        if mouse_delta:
-            for slider in sliders:
-                slider.work(mouse_pos,mouse_pressed,grids)
-
         for event in pygame.event.get():
-            if event.type == pygame.MOUSEBUTTONDOWN:
-                if event.button >= len(mouse_pressed):
-                    pygame.quit()
-                    pygame.font.quit()
-                else:
-                    mouse_pressed[event.button] = True
-
-                for button in buttons:
-                    button.click(mouse_pos, grids)
-                for grid in grids:
-                    grid.click(mouse_pos, event.button)
-                    grid.alg()
-                    grid.draw_grid()
-                stuff.print_debug(font,win,grids)
-
-            if event.type == pygame.MOUSEBUTTONUP:
-                mouse_pressed[event.button] = False
-                for button in buttons:
-                    button.is_pressed = False
-                    button.draw()
-
             if event.type == pygame.QUIT:
                 on = False
                 break
 
+            mouse_pos = pygame.mouse.get_pos()
+            if mouse_pos == mouse_pos_old:
+                mouse_delta = 0
+            else:
+                mouse_delta = st(mouse_pos, mouse_pos_old)
+
+            for button in buttons:
+                button.handle(event,mouse_pos,grids)
+
+            for slider in sliders:
+                slider.handle(event,mouse_pos,grids)
+
+            for grid in grids:
+                out = grid.handle(event,mouse_pos,mouse_delta)
+                if out:
+                    stuff.print_debug(font,win,grids,grid,out[0])
+        
+        mouse_pos_old = mouse_pos
+
         stop_timer = time.perf_counter_ns()
         frame_time1 = stop_timer - start_timer
+        start_timer = time.perf_counter_ns()
 
         if frame_count % (len(frame_times)+1) == 0:
             frame_time = sum(frame_times) / len(frame_times)
             stuff.print_fps(win,font,grids,frame_time)
-            
         else:
             frame_times[(frame_count % len(frame_times)) - 1] = frame_time1
 
         frame_count += 1
+        pygame.display.update()
 
 if __name__ == "__main__":
     try:

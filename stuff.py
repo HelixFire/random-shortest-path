@@ -37,10 +37,27 @@ class Grid:
         self.in_edit = False #bool
         self.arrows = []
 
+    def handle(self,event,mouse_pos,mouse_delta):
+        if self.ongrid(mouse_pos):
+            if self.is_active and mouse_delta:
+                return self.find_next(mouse_pos)
+            elif not self.is_active and mouse_delta:
+                self.is_active = True
+        else:
+            if self.is_active:
+                self.is_active = False
+
+        if event.type == pygame.MOUSEBUTTONDOWN:
+            self.click(mouse_pos, event.button)
+
     def alg(self):
-        times = []
-        start_time = time.perf_counter_ns()
-        self.arrows = []
+        """
+            grid: 2d list with int
+            arrows: list with Arrow
+            self.get_start() returns [(y_idx,x_idx),...]
+            self.get_end() returns [(y_idx,x_idx),...]
+        """
+        self.arrows.clear()
         grid = copy.deepcopy(self.data)
 
         try:
@@ -52,24 +69,52 @@ class Grid:
         on = True
         while on:
             grid[start[1]][start[0]] = 0
-            start_find = time.perf_counter_ns()
             end = findnext(grid,start)
-            end_find = time.perf_counter_ns()
-            times.append(end_find-start_find)
             if end:
                 self.arrows.append(Arrow(self.win,self.get_cell_pos(start),self.get_cell_pos(end)))
+                a = Arrow(self.win,self.get_cell_pos(start),self.get_cell_pos(end))
+                a.draw()
                 start = end
             else:
                 on = False
             
         self.arrows.append(Arrow(self.win,self.get_cell_pos(start),self.get_cell_pos(end_cell)))
-        stop_time = time.perf_counter_ns()
-        find_time = sum(times) / len(times)
-        print(int(stop_time-start_time)/10**3, int(sum(times)/10**3), int(find_time/10**3))
 
     def find_next(self,pos):
+        def _findnext(grid,pos):
+            def index_gen(size):
+                for x in range(size[0]*size[1]):
+                    idx = len_table.argmin()
+                    yield idx
+                    len_table[idx//size[1]][idx%size[1]] = 2*size[1]
+
+            def table(size,zero):
+                a = np.zeros(size)
+                b = np.zeros(size)
+                for y in range(-zero[1],0):
+                    a[y + zero[1]] = abs(y)
+                for x in range(-zero[0],0):
+                    b[:, [x + zero[0]]] = abs(x)
+                return np.sqrt(np.square(a)+np.square(b))
+
+            if not any(any(row) for row in self.data):
+                return False
+
+            size = (len(grid),len(grid[0]))
+            len_table = table(size,pos)
+            size = (len(grid),len(grid[0]))
+
+            for index in index_gen(size):
+                x_idx = index%size[1]
+                y_idx = index//size[1]
+
+                if grid[y_idx][x_idx]:
+                    return (x_idx,y_idx)
+
+            return False
+
         idx = self.get_cell_index(pos)
-        next_cell = findnext(self.data,idx)
+        next_cell = _findnext(self.data,idx)
         pos_cell = self.get_cell_pos(next_cell)
         return [next_cell,pos_cell]
 
@@ -78,15 +123,13 @@ class Grid:
         self.in_edit = False
 
     def ongrid(self,pos):
-        inside_x = pos[0] > self.corner[0] and pos[0] < self.corner[0]+self.size[0]
-        inside_y = pos[1] > self.corner[1] and pos[1] < self.corner[1]+self.size[1]
-        if inside_x and inside_y:   return True
-        else:   return False
-
-    def click(self,pos,button):
         rect = pygame.Rect(self.corner,self.size)
         if pygame.Rect.collidepoint(rect,pos):
-            
+            return True
+        else: return False
+
+    def click(self,pos,button):
+        if self.ongrid(pos):
             i = self.get_cell_index(pos)
             data = self.data[i[1]][i[0]]
             no_start = type(self.get_start())==bool
@@ -128,9 +171,6 @@ class Grid:
                     if any([data==0, data==2, data==3]):
                         self.data[i[1]][i[0]] = 0
 
-                        if not type(self.get_cells) == bool:
-                            pass
-
                 elif button == 3:   #right click
                     set_table = {
                         0 : [data==3],
@@ -139,35 +179,37 @@ class Grid:
                         if all(set_table[x]):
                             self.data[i[1]][i[0]] = x
 
-            if not type(self.get_start()) == bool:  #this is to reset old start/end cells for preset mode
+            if type(self.get_start()) != bool:  #this is to reset old start/end cells for preset mode
                 if len(self.get_start()) > 1:       #if there is no start cell, output from get_start will be False, causing a TypeError
                     self.data[start[0][1]][start[0][0]] = 0
-            if not type(self.get_end()) == bool:
+            if type(self.get_end()) != bool:
                 if len(self.get_end()) > 1:
                     self.data[end[0][1]][end[0][0]] = 0
-
-            if data-self.data[i[1]][i[0]]:
-                self.draw_data(i)
             
+        self.alg()
+        self.draw_grid()
         #if anyone reads this, tell me if theres a better way to assert functions to mouse inputs with respect to what is being clicked on
 
     def clear(self):
-        self.data = np.zeros((self.cells,self.cells)).tolist()
+        self.data = np.zeros((self.cells,self.cells)).astype(int).tolist()
         self.in_edit = True
 
-    def draw_grid(self):
-        self.rects = self.get_rects()
-        pd = (3,3)
-        corner = st(self.corner,pd)
-        size = at(self.size,at(pd,pd))
-        pygame.gfxdraw.box(self.win,(corner,size),colors['black'])
+    def draw_grid(self,index=False):
+        if index:
+            self.draw_data(index)
+        else:
+            self.rects = self.get_rects()
+            pd = (3,3)
+            corner = st(self.corner,pd)
+            size = at(self.size,at(pd,pd))
+            pygame.gfxdraw.box(self.win,(corner,size),colors['black'])
 
-        for y in range(self.cells):
-            for x in range(self.cells):
-                self.draw_data((x,y))
-        
-        for arrow in self.arrows:
-            arrow.draw()
+            for y in range(self.cells):
+                for x in range(self.cells):
+                    self.draw_data((x,y))
+            
+            for arrow in self.arrows:
+                arrow.draw()
         
     def draw_data(self,index):
         if self.data[index[1]][index[0]] == 0:
@@ -189,9 +231,9 @@ class Grid:
         pygame.draw.rect(self.win,f_color,rect,1)
 
     def get_rects(self):
-        self.step_size = int(self.size[0]/self.cells)
-        error_x = int((self.size[0]-self.cells*self.step_size)/2)  
-        error_y = int((self.size[1]-self.cells*self.step_size)/2)
+        self.step_size = self.size[0]//self.cells
+        error_x = (self.size[0]-self.cells*self.step_size)//2
+        error_y = (self.size[1]-self.cells*self.step_size)//2
         self.e_corner = at(self.corner,(error_x,error_y))
         self.cell_size = (self.step_size,self.step_size)
         self.e_size = mt(self.cell_size,(self.cells,self.cells))
@@ -200,7 +242,7 @@ class Grid:
         def midpoints():
             for x in range(self.cells**2):
                 xoff = x%self.cells * self.step_size
-                yoff = int(x/self.cells) * self.step_size
+                yoff = x//self.cells * self.step_size
                 yield at(at(self.e_corner,(xoff,yoff)),celloffset)
 
         rects = []
@@ -214,7 +256,7 @@ class Grid:
         c,cells = 0,[]
         for x in np.array(self.data).flatten().tolist():
             if x == 1:
-                cells.append((c%self.cells,int(c/self.cells)))
+                cells.append((c%self.cells,c//self.cells))
             c += 1
         return cells
 
@@ -222,20 +264,20 @@ class Grid:
         if index == False:
             posx,posy = at(self.corner,dt(self.size,(2,2)))
         else:
-            posx = int(self.e_corner[0] + int(self.step_size/2) + index[0] * self.step_size)
-            posy = int(self.e_corner[1] + int(self.step_size/2) + index[1] * self.step_size)
+            posx = self.e_corner[0] + self.step_size//2 + index[0] * self.step_size
+            posy = self.e_corner[1] + self.step_size//2 + index[1] * self.step_size
         return (posx,posy)
 
     def get_cell_index(self,pos):
-        ix = int((pos[0]-self.e_corner[0])/self.step_size)
-        iy = int((pos[1]-self.e_corner[1])/self.step_size)
+        ix = (pos[0]-self.e_corner[0])//self.step_size
+        iy = (pos[1]-self.e_corner[1])//self.step_size
         return (ix,iy)
 
     def get_start(self):
         c,out = 0,[]
         for x in np.array(self.data).flatten().tolist():
             if x == 2:
-                out.append((c%self.cells,int(c/self.cells)))
+                out.append((c%self.cells,c//self.cells))
             c+=1
         if len(out) == 0:
             return False
@@ -245,7 +287,7 @@ class Grid:
         c,out = 0,[]
         for x in np.array(self.data).flatten().tolist():
             if x == 3:
-                out.append((c%self.cells,int(c/self.cells)))
+                out.append((c%self.cells,c//self.cells))
             c+=1
         if len(out) == 0:
             return False
@@ -263,6 +305,14 @@ class Button:
         self.size = self.image.get_size()
         self.end_corner = at(self.corner,self.size)
         self.is_pressed = False
+
+    def handle(self,event,mouse_pos,grids):
+        if event.type == pygame.MOUSEBUTTONDOWN:
+            self.click(mouse_pos, grids)
+
+        elif event.type == pygame.MOUSEBUTTONUP:
+            self.is_pressed = False
+            self.draw()
 
     def draw(self):
         pygame.gfxdraw.box(self.win,(self.corner,self.size),colors['black'])
@@ -322,7 +372,18 @@ class Arrow:
     def draw(self):
         offset_x = 0
         start = 0
-        pygame.draw.line(self.win, self.color, self.spos, self.epos, 5)
+        pygame.draw.line(self.win, self.color, self.spos, self.epos, 3)
+
+        x = math.cos(self.get_angle()[1]+0.35)*25
+        y = math.sin(self.get_angle()[0]+0.35)*25
+        start = (y,x)
+        pygame.draw.line(self.win, self.color, at(start,self.epos), self.epos, 3)
+
+        x = math.cos(self.get_angle()[1]-0.35)*25
+        y = math.sin(self.get_angle()[0]-0.35)*25
+        start = (y,x)
+        pygame.draw.line(self.win, self.color, at(start,self.epos), self.epos, 3)
+
 
     def drawgrid(self,grid):
         diff = self.get_lengh()
@@ -346,7 +407,7 @@ class Arrow:
         if not dx:
             dx -= 0.000000000001
 
-        rad = math.atan(dy/dx)
+        rad = math.atan(dy/dx)-math.pi/2
         angle = rad * 180/math.pi
         
         if dx > 0 and dy > 0:
@@ -373,6 +434,31 @@ class Slider:
 
         self.size = (80,20)
         self.state = state
+        self.pressed = False
+
+    def handle(self,event,mouse_pos,grids):
+        if event.type == pygame.MOUSEBUTTONDOWN and self.hitbox(mouse_pos):
+                self.pressed = True
+        elif event.type == pygame.MOUSEBUTTONUP:
+            self.pressed = False
+        
+        if self.pressed:
+            step_px = (self.num_range[1]-self.num_range[0]) / self.size[0]
+            state = self.state
+            self.state = min(self.get_nums(), key=lambda x:abs(x-((mouse_pos[0]-self.corner[0]) * step_px) - self.num_range[0]))
+
+            if state-self.state:
+                self.draw()
+
+                if self.name == 'cells':
+                    grids[0].cells = int(self.state)
+                    grids[0].rand()
+
+                if self.name == 'prob':
+                    grids[0].probability = self.state
+                
+                grids[0].arrows.clear()
+                grids[0].draw_grid()
 
     def draw(self):
         def clear(color=colors['black']):
@@ -405,89 +491,20 @@ class Slider:
         draw_line()
         draw_slider()
         draw_text()
-        
+
+    def hitbox(self,pos):
+        rect = pygame.Rect(self.corner,at(self.size,(1,0)))
+        if pygame.Rect.collidepoint(rect,pos):
+            return True
+        else:
+            return False
+
     def get_nums(self):
         start = self.num_range[0]
         stop = self.num_range[1]+self.step_size
         step = self.step_size
         dp = self.step_size**-1
         return (np.arange(start,stop,step)*dp).astype(int)/dp
-        
-    def work(self,pos,mouse_pressed,grids):
-        rect = pygame.Rect(self.corner,at(self.size,(1,0)))
-        if pygame.Rect.collidepoint(rect,pos) and mouse_pressed[1]:
-            step_px = (self.num_range[1]-self.num_range[0]) / self.size[0]
-            state = self.state
-            self.state = min(self.get_nums(), key=lambda x:abs(x-((pos[0]-self.corner[0]) * step_px) - self.num_range[0]))
-
-            if state-self.state:
-                self.draw()
-
-                if self.name == 'cells':
-                    grids[0].cells = int(self.state)
-                    grids[0].rand()
-                    grids[0].draw_grid()
-
-                if self.name == 'prob':
-                    grids[0].probability = self.state
-                    grids[0].draw_grid()
-
-def table(size, zero):
-    a = np.zeros(size)
-    b = np.zeros(size)
-    for y in range(-zero[1], size[1] - zero[1]):
-        a[y + zero[1]] = abs(y)
-    for x in range(-zero[0], size[0] - zero[0]):
-        b[:, [x + zero[0]]] = abs(x)
-    return np.sqrt(np.square(a)+np.square(b))
-
-def index_gen(size, zero):
-    len_table = table(size,zero)
-
-    for x in range(size[0]*size[1]):
-        idx = len_table.argmin()
-        yield idx
-        y = int(idx/size[1])
-        len_table[y][idx%size[1]] = 2*size[1]
-
-def findnext(grid, zero):
-    size = (len(grid),len(grid[0]))
-    for index in index_gen(size, zero):
-        x_idx = index%size[1]
-        y_idx = int(index/size[1])
-        
-        if grid[y_idx][x_idx] == 1:
-            return  (x_idx,y_idx)
-    
-    return False
-
-def findnext2(grid, pos):
-    def index_gen(size):
-        for x in range(size[0]*size[1]):
-            idx = len_table.argmin()
-            yield idx
-            y = int(idx/size[1])
-            len_table[y][idx%size[1]] = 2*size[1]
-
-    a = np.zeros(pos)
-    b = np.zeros(pos)
-
-    for y in range(-pos[0], pos[0] - pos[0]):
-        a[y + pos[0]] = abs(y)
-    for x in range(-pos[1], pos[1] - pos[1]):
-        b[:, [x + pos[1]]] = abs(x)
-
-    len_table = np.sqrt(np.square(a)+np.square(b))
-    size = (len(grid),len(grid[0]))
-
-    for index in index_gen(size):
-        x_idx = index%size[1]
-        y_idx = int(index/size[1])
-
-        if grid[y_idx][x_idx]:
-            return  (x_idx,y_idx)
-
-    return False
 
 def rand_bool_grid(size, p = 0.95):
         return np.random.choice([0,1], size, p=[p, 1-p]).tolist()
@@ -550,7 +567,7 @@ def print_debug(font,win,grids,grid=False,next_cell=False):
         if grid.in_edit:
             text = f'Edit Mode'
             textpos = (grids[3].endcorner[0]+10, winsize[1]-10)
-            font.render_to(win,textpos,text,colors['red'],None,size=25)
+            font.render_to(win,textpos,text,colors['lightblue'],None,size=25)
 
     winsize = pygame.Surface.get_size(win)
     corner = (grids[-1].endcorner[0],grids[-1].corner[1])
@@ -569,7 +586,7 @@ def print_fps(win,font,grids,frame_time):
     size = (80,20)
     corner = st(textpos,(5,15))
     pygame.gfxdraw.box(win,(corner,size),colors['black'])
-    text = f'{int(1 / (frame_time / 10 ** 9))} fps'
+    text = f'{int(1/(frame_time / 10 ** 9))} fps'
     font.render_to(win, textpos, text, colors['white'], None, size=20)
 
 def at(a,b):
@@ -583,3 +600,42 @@ def mt(a,b):
 
 def dt(a,b):
     return (a[0]/b[0],a[1]/b[1])
+
+def tm(operator):
+    if operator == '+':
+        return lambda a,b: (a[0]+b[0],a[1]+b[1])
+    elif operator == '-':
+        return lambda a,b: (a[0]-b[0],a[1]-b[1])
+    elif operator == '*':
+        return lambda a,b: (a[0]*b[0],a[1]*b[1])
+    elif operator == '/':
+        return lambda a,b: (a[0]/b[0],a[1]/b[1])
+
+def findnext(grid,pos):
+    def index_gen(size):
+        for x in range(size[0]*size[1]):
+            idx = len_table.argmin()
+            yield idx
+            len_table[idx//size[1]][idx%size[1]] = 2*size[1]
+
+    def table(size,zero):
+        a = np.zeros(size)
+        b = np.zeros(size)
+        for y in range(-zero[1],0):
+            a[y + zero[1]] = abs(y)
+        for x in range(-zero[0],0):
+            b[:, [x + zero[0]]] = abs(x)
+        return np.sqrt(np.square(a)+np.square(b))
+            
+    size = (len(grid),len(grid[0]))
+    len_table = table(size,pos)
+    size = (len(grid),len(grid[0]))
+
+    for index in index_gen(size):
+        x_idx = index%size[1]
+        y_idx = index//size[1]
+
+        if grid[y_idx][x_idx] == 1:
+            return  (x_idx,y_idx)
+
+    return False
